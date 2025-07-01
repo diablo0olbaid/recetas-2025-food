@@ -19,7 +19,7 @@ export default async function handler(req, res) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-3.5-turbo", // podés cambiar a mistralai/mixtral-8x7b si querés
+        model: "mistralai/mixtral-8x7b", // podés cambiar a mistralai/mixtral-8x7b si querés
         messages: [
           {
             role: "system",

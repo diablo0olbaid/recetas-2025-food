@@ -19,7 +19,7 @@ export default async function handler(req, res) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemma-7b-it:free",
+        model: "kimi-chat/devin:free",
         messages: [
           {
             role: "system",

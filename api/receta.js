@@ -1,45 +1,34 @@
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
-      return res.status(405).json({ error: "Solo se permite el método POST" });
+      return res.status(405).json({ error: "Solo POST permitido" });
     }
 
     const prompt = req.body.prompt || "una receta de tarta de atún";
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const apiKey = process.env.HUGGINGFACE_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({ error: "Falta la clave de OpenRouter" });
+      return res.status(500).json({ error: "Falta la clave de Hugging Face (HUGGINGFACE_API_KEY)" });
     }
 
-    const respuestaIA = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const hfResponse = await fetch("https://api-inference.huggingface.co/models/google/flan-t5-large", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "anthropic/claude-3-sonnet",
-        messages: [
-          {
-            role: "system",
-            content: "Sos un chef argentino que da recetas simples, claras y caseras, siempre en español rioplatense.",
-          },
-          {
-            role: "user",
-            content: `Generá una receta paso a paso para: ${prompt}. Incluir lista de ingredientes con guiones y preparación.`
-          }
-        ],
-        temperature: 0.7,
+        inputs: `Generá una receta para: ${prompt}`,
       }),
     });
 
-    const data = await respuestaIA.json();
+    const data = await hfResponse.json();
 
-    if (!data.choices || !data.choices[0]?.message?.content) {
-      return res.status(500).json({ error: "Error al recibir respuesta de OpenRouter", detalle: data });
+    if (!data || !data[0]?.generated_text) {
+      return res.status(500).json({ error: "Respuesta inválida de Hugging Face", detalle: data });
     }
 
-    const receta = data.choices[0].message.content;
+    const receta = data[0].generated_text;
     const ingredientes = extraerIngredientes(receta);
 
     const productos = {};

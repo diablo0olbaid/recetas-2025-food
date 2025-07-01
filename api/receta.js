@@ -5,25 +5,25 @@ export default async function handler(req, res) {
     }
 
     const prompt = req.body.prompt || "Quiero una receta simple";
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.OPENROUTER_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({ error: "Falta la clave de OpenAI" });
+      return res.status(500).json({ error: "Falta la clave de OpenRouter (OPENROUTER_API_KEY)" });
     }
 
-    // 🔮 LLAMADA A OPENAI
-    const respuestaIA = await fetch("https://api.openai.com/v1/chat/completions", {
+    // 🧠 LLAMADA A OPENROUTER (IA GRATIS)
+    const respuestaIA = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-3.5-turbo",
+        model: "openai/gpt-3.5-turbo", // podés cambiar a mistralai/mixtral-8x7b si querés
         messages: [
           {
             role: "system",
-            content: "Sos un chef que da recetas simples, ricas, claras y en español argentino.",
+            content: "Sos un chef que da recetas simples, claras y en español argentino.",
           },
           { role: "user", content: `Generá una receta para: ${prompt}` },
         ],
@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     const data = await respuestaIA.json();
 
     if (!data.choices || !data.choices[0]?.message?.content) {
-      return res.status(500).json({ error: "Error al recibir respuesta de OpenAI", detalle: data });
+      return res.status(500).json({ error: "Error al recibir respuesta de OpenRouter", detalle: data });
     }
 
     const receta = data.choices[0].message.content;
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
   }
 }
 
-// 🔍 Extraer ingredientes con expresión simple
+// 🧪 Extraer ingredientes de la receta
 function extraerIngredientes(texto) {
   const matches = texto.match(/- (.+)/g) || [];
   return matches.map(i => i.replace("- ", "").split(" ")[0].toLowerCase());

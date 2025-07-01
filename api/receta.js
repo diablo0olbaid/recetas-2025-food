@@ -11,24 +11,29 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Falta la clave de Hugging Face (HUGGINGFACE_API_KEY)" });
     }
 
-    const hfResponse = await fetch("https://api-inference.huggingface.co/models/google/flan-t5-large", {
+    const response = await fetch("https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        inputs: `Generá una receta para: ${prompt}`,
+        inputs: `Generá una receta simple, paso a paso, para: ${prompt}`,
       }),
     });
 
-    const data = await hfResponse.json();
+    const text = await response.text();
 
-    if (!data || !data[0]?.generated_text) {
-      return res.status(500).json({ error: "Respuesta inválida de Hugging Face", detalle: data });
+    // A veces devuelve texto plano, a veces JSON. Intentamos detectar.
+    let generatedText;
+    try {
+      const parsed = JSON.parse(text);
+      generatedText = parsed[0]?.generated_text || text;
+    } catch (err) {
+      generatedText = text;
     }
 
-    const receta = data[0].generated_text;
+    const receta = generatedText;
     const ingredientes = extraerIngredientes(receta);
 
     const productos = {};

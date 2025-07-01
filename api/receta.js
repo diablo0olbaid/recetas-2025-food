@@ -1,76 +1,61 @@
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Sólo se permite el método POST' });
-  }
-
-  const { prompt } = req.body;
-
-  if (!prompt || typeof prompt !== 'string') {
-    return res.status(400).json({ error: 'Prompt inválido' });
-  }
-
-  // Simulamos IA: recetas "predefinidas"
-  const recetasBase = {
-    tarta: `Ingredientes:
-- 1 masa para tarta
-- 3 huevos
-- 200g de queso cremoso
-- 1 lata de atún
-
-Pasos:
-1. Mezclar los huevos con el queso y el atún.
-2. Volcar sobre la masa y hornear 30 min a 180°C.`,
-
-    budín: `Ingredientes:
-- 2 bananas maduras
-- 2 huevos
-- 1 taza de harina sin gluten
-- 1/2 taza de azúcar
-
-Pasos:
-1. Pisá las bananas y mezclalas con el resto de los ingredientes.
-2. Volcá en un molde y horneá 40 min a 180°C.`,
-  };
-
-  const clave = Object.keys(recetasBase).find(k => prompt.toLowerCase().includes(k));
-  const receta = clave ? recetasBase[clave] : 'Not Found';
-
-  // Si no se encontró receta
-  if (receta === 'Not Found') {
-    return res.status(200).json({ receta: 'Not Found', productos: {} });
-  }
-
-  // Buscar productos en VTEX por ingredientes
-  const ingredientes = extraerIngredientes(receta);
-  const productos = {};
-
-  for (const ingrediente of ingredientes) {
-    const url = `https://www.carrefour.com.ar/api/catalog_system/pub/products/search/${encodeURIComponent(ingrediente)}`;
-
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-
-      productos[ingrediente] = (data || []).slice(0, 3).map(prod => ({
-        nombre: prod.productName,
-        precio: prod.items?.[0]?.sellers?.[0]?.commertialOffer?.Price,
-        imagen: prod.items?.[0]?.images?.[0]?.imageUrl,
-        link: `https://www.carrefour.com.ar/${prod.linkText}/p`,
-      }));
-    } catch (e) {
-      productos[ingrediente] = [];
+  try {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Sólo se permite POST' });
     }
-  }
 
-  return res.status(200).json({ receta, productos });
+    const { prompt } = req.body;
+    const apiKey = process.env.HUGGINGFACE_API_KEY;
+
+    if (!prompt || !apiKey) {
+      return res.status(400).json({ error: 'Falta prompt o token' });
+    }
+
+    const response = await fetch('https://api-inference.huggingface.co/models/mistralai/Mixtral-8x7B-Instruct-v0.1', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputs: `Generá una receta completa en español para: ${prompt}`,
+      }),
+    });
+
+    const data = await response.json();
+
+    const texto = Array.isArray(data) ? data[0]?.generated_text : null;
+    if (!texto) {
+      return res.status(500).json({ error: 'No se pudo generar la receta', detalle: data });
+    }
+
+    const ingredientes = extraerIngredientes(texto);
+    const productos = {};
+
+    for (const ingrediente of ingredientes) {
+      const vtRes = await fetch(`https://www.carrefour.com.ar/api/catalog_system/pub/products/search/${encodeURIComponent(ingrediente)}`);
+      const vtData = await vtRes.json();
+      productos[ingrediente] = (vtData || []).slice(0, 3).map(p => {
+        const item = p.items?.[0];
+        const seller = item?.sellers?.[0];
+        return {
+          nombre: p.productName,
+          imagen: item?.images?.[0]?.imageUrl || '',
+          precio: seller?.commertialOffer?.Price || '',
+          link: `/checkout/cart/add?sku=${item?.itemId}&qty=1&seller=1&sc=1`,
+        };
+      });
+    }
+
+    return res.status(200).json({ receta: texto, productos });
+
+  } catch (error) {
+    console.error('ERROR /api/receta:', error);
+    return res.status(500).json({ error: 'Error interno', detalle: error.message });
+  }
 }
 
-// Función simple que detecta ingredientes de la receta
-function extraerIngredientes(recetaTexto) {
-  const posibles = [
-    'huevos', 'banana', 'azúcar', 'harina', 'atún', 'queso', 'cebolla', 'masa',
-  ];
-
-  const normalizado = recetaTexto.toLowerCase();
-  return posibles.filter(i => normalizado.includes(i));
+function extraerIngredientes(texto) {
+  const matches = texto.match(/- (.+)/g) || [];
+  return matches.map(i => i.replace('- ', '').split(' ')[0].toLowerCase());
 }

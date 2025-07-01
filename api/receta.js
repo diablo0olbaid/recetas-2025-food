@@ -4,14 +4,13 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: "Solo se permite el método POST" });
     }
 
-    const prompt = req.body.prompt || "Quiero una receta simple";
+    const prompt = req.body.prompt || "una receta de tarta de atún";
     const apiKey = process.env.OPENROUTER_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({ error: "Falta la clave de OpenRouter (OPENROUTER_API_KEY)" });
+      return res.status(500).json({ error: "Falta la clave de OpenRouter" });
     }
 
-    // ✅ IA GRATIS: Deepseek vía OpenRouter
     const respuestaIA = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -19,13 +18,16 @@ export default async function handler(req, res) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "kimi-chat/devin:free",
+        model: "anthropic/claude-3-sonnet",
         messages: [
           {
             role: "system",
-            content: "Sos un chef argentino que da recetas simples, caseras y fáciles de entender. Usá español rioplatense.",
+            content: "Sos un chef argentino que da recetas simples, claras y caseras, siempre en español rioplatense.",
           },
-          { role: "user", content: `Generá una receta para: ${prompt}` }
+          {
+            role: "user",
+            content: `Generá una receta paso a paso para: ${prompt}. Incluir lista de ingredientes con guiones y preparación.`
+          }
         ],
         temperature: 0.7,
       }),
@@ -38,11 +40,8 @@ export default async function handler(req, res) {
     }
 
     const receta = data.choices[0].message.content;
-
-    // Extraer ingredientes (simplificado)
     const ingredientes = extraerIngredientes(receta);
 
-    // Buscar productos Carrefour vía VTEX
     const productos = {};
     for (let i = 0; i < ingredientes.length; i++) {
       const nombre = ingredientes[i];
@@ -54,7 +53,7 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("Error en /api/receta:", error);
-    return res.status(500).json({ error: "Error interno del servidor", detalle: error.message });
+    return res.status(500).json({ error: "Error interno", detalle: error.message });
   }
 }
 

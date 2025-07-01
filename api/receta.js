@@ -19,7 +19,7 @@ export default async function handler(req, res) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "mistral/mistral-7b-instruct:free", // podés cambiar a mistralai/mixtral-8x7b si querés
+        model: "deepseek-ai/deepseek-coder:free", // podés cambiar a mistralai/mixtral-8x7b si querés
         messages: [
           {
             role: "system",

@@ -11,7 +11,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Falta la clave de OpenRouter (OPENROUTER_API_KEY)" });
     }
 
-    // 🧠 LLAMADA A OPENROUTER (IA GRATIS)
+    // ✅ IA GRATIS: Deepseek vía OpenRouter
     const respuestaIA = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -19,13 +19,13 @@ export default async function handler(req, res) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "deepseek-ai/deepseek-coder:free", // podés cambiar a mistralai/mixtral-8x7b si querés
+        model: "deepseek-ai/deepseek-coder:free",
         messages: [
           {
             role: "system",
-            content: "Sos un chef que da recetas simples, claras y en español argentino.",
+            content: "Sos un chef argentino que da recetas simples, caseras y fáciles de entender. Usá español rioplatense.",
           },
-          { role: "user", content: `Generá una receta para: ${prompt}` },
+          { role: "user", content: `Generá una receta para: ${prompt}` }
         ],
         temperature: 0.7,
       }),
@@ -39,10 +39,10 @@ export default async function handler(req, res) {
 
     const receta = data.choices[0].message.content;
 
-    // 🍳 EXTRAER INGREDIENTES
+    // Extraer ingredientes (simplificado)
     const ingredientes = extraerIngredientes(receta);
 
-    // 🛒 BUSCAR PRODUCTOS EN VTEX
+    // Buscar productos Carrefour vía VTEX
     const productos = {};
     for (let i = 0; i < ingredientes.length; i++) {
       const nombre = ingredientes[i];
@@ -58,13 +58,11 @@ export default async function handler(req, res) {
   }
 }
 
-// 🧪 Extraer ingredientes de la receta
 function extraerIngredientes(texto) {
   const matches = texto.match(/- (.+)/g) || [];
   return matches.map(i => i.replace("- ", "").split(" ")[0].toLowerCase());
 }
 
-// 🔎 Buscar productos reales en VTEX Carrefour
 async function buscarVTEX(termino) {
   try {
     const response = await fetch(`https://www.carrefour.com.ar/api/catalog_system/pub/products/search/${encodeURIComponent(termino)}`);

@@ -1,73 +1,76 @@
 export default async function handler(req, res) {
-  try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Solo POST permitido" });
-    }
-
-    const prompt = req.body.prompt || "una receta de tarta de atún";
-    const apiKey = process.env.HUGGINGFACE_API_KEY;
-
-    if (!apiKey) {
-      return res.status(500).json({ error: "Falta la clave de Hugging Face" });
-    }
-
-    const response = await fetch("https://api-inference.huggingface.co/models/cognitivecomputations/dolphin-2.5-mixtral-8x7b-dpo", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        inputs: `Generá una receta casera en español para: ${prompt}. Incluir ingredientes y pasos.`,
-      }),
-    });
-
-    const data = await response.json();
-
-    let receta = "";
-    if (Array.isArray(data) && data[0]?.generated_text) {
-      receta = data[0].generated_text;
-    } else {
-      receta = "No se pudo generar la receta.";
-    }
-
-    const ingredientes = extraerIngredientes(receta);
-    const productos = {};
-    for (let i = 0; i < ingredientes.length; i++) {
-      const nombre = ingredientes[i];
-      const resultado = await buscarVTEX(nombre);
-      productos[nombre] = resultado;
-    }
-
-    return res.status(200).json({ receta, productos });
-
-  } catch (error) {
-    console.error("Error en /api/receta:", error);
-    return res.status(500).json({ error: "Error interno", detalle: error.message });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Sólo se permite el método POST' });
   }
+
+  const { prompt } = req.body;
+
+  if (!prompt || typeof prompt !== 'string') {
+    return res.status(400).json({ error: 'Prompt inválido' });
+  }
+
+  // Simulamos IA: recetas "predefinidas"
+  const recetasBase = {
+    tarta: `Ingredientes:
+- 1 masa para tarta
+- 3 huevos
+- 200g de queso cremoso
+- 1 lata de atún
+
+Pasos:
+1. Mezclar los huevos con el queso y el atún.
+2. Volcar sobre la masa y hornear 30 min a 180°C.`,
+
+    budín: `Ingredientes:
+- 2 bananas maduras
+- 2 huevos
+- 1 taza de harina sin gluten
+- 1/2 taza de azúcar
+
+Pasos:
+1. Pisá las bananas y mezclalas con el resto de los ingredientes.
+2. Volcá en un molde y horneá 40 min a 180°C.`,
+  };
+
+  const clave = Object.keys(recetasBase).find(k => prompt.toLowerCase().includes(k));
+  const receta = clave ? recetasBase[clave] : 'Not Found';
+
+  // Si no se encontró receta
+  if (receta === 'Not Found') {
+    return res.status(200).json({ receta: 'Not Found', productos: {} });
+  }
+
+  // Buscar productos en VTEX por ingredientes
+  const ingredientes = extraerIngredientes(receta);
+  const productos = {};
+
+  for (const ingrediente of ingredientes) {
+    const url = `https://www.carrefour.com.ar/api/catalog_system/pub/products/search/${encodeURIComponent(ingrediente)}`;
+
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+
+      productos[ingrediente] = (data || []).slice(0, 3).map(prod => ({
+        nombre: prod.productName,
+        precio: prod.items?.[0]?.sellers?.[0]?.commertialOffer?.Price,
+        imagen: prod.items?.[0]?.images?.[0]?.imageUrl,
+        link: `https://www.carrefour.com.ar/${prod.linkText}/p`,
+      }));
+    } catch (e) {
+      productos[ingrediente] = [];
+    }
+  }
+
+  return res.status(200).json({ receta, productos });
 }
 
-function extraerIngredientes(texto) {
-  const matches = texto.match(/- (.+)/g) || [];
-  return matches.map(i => i.replace("- ", "").split(" ")[0].toLowerCase());
-}
+// Función simple que detecta ingredientes de la receta
+function extraerIngredientes(recetaTexto) {
+  const posibles = [
+    'huevos', 'banana', 'azúcar', 'harina', 'atún', 'queso', 'cebolla', 'masa',
+  ];
 
-async function buscarVTEX(termino) {
-  try {
-    const response = await fetch(`https://www.carrefour.com.ar/api/catalog_system/pub/products/search/${encodeURIComponent(termino)}`);
-    const data = await response.json();
-    return data.slice(0, 3).map(producto => {
-      const item = producto.items?.[0];
-      const seller = item?.sellers?.[0];
-      return {
-        nombre: producto.productName,
-        imagen: item?.images?.[0]?.imageUrl || "",
-        precio: seller?.commertialOffer?.Price || null,
-        link: `/checkout/cart/add?sku=${item?.itemId}&qty=1&seller=1&sc=1`
-      };
-    });
-  } catch (err) {
-    console.error("Error al buscar en VTEX para:", termino, err);
-    return [];
-  }
+  const normalizado = recetaTexto.toLowerCase();
+  return posibles.filter(i => normalizado.includes(i));
 }

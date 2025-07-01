@@ -8,34 +8,30 @@ export default async function handler(req, res) {
     const apiKey = process.env.HUGGINGFACE_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({ error: "Falta la clave de Hugging Face (HUGGINGFACE_API_KEY)" });
+      return res.status(500).json({ error: "Falta la clave de Hugging Face" });
     }
 
-    const response = await fetch("https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct", {
+    const response = await fetch("https://api-inference.huggingface.co/models/cognitivecomputations/dolphin-2.5-mixtral-8x7b-dpo", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        inputs: `Generá una receta simple, paso a paso, para: ${prompt}`,
+        inputs: `Generá una receta casera en español para: ${prompt}. Incluir ingredientes y pasos.`,
       }),
     });
 
-    const text = await response.text();
+    const data = await response.json();
 
-    // A veces devuelve texto plano, a veces JSON. Intentamos detectar.
-    let generatedText;
-    try {
-      const parsed = JSON.parse(text);
-      generatedText = parsed[0]?.generated_text || text;
-    } catch (err) {
-      generatedText = text;
+    let receta = "";
+    if (Array.isArray(data) && data[0]?.generated_text) {
+      receta = data[0].generated_text;
+    } else {
+      receta = "No se pudo generar la receta.";
     }
 
-    const receta = generatedText;
     const ingredientes = extraerIngredientes(receta);
-
     const productos = {};
     for (let i = 0; i < ingredientes.length; i++) {
       const nombre = ingredientes[i];
